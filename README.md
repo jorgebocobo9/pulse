@@ -1,5 +1,7 @@
 # Pulse
 
+[![CI](https://github.com/jorgebocobo9/pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgebocobo9/pulse/actions/workflows/ci.yml)
+
 A Slack assistant for a (fictional) performance marketing team. Ask it about campaign performance in plain English. Claude picks the right tools, reads the numbers from a database and answers in the thread. Risky actions, such as pausing a campaign, only run after a team lead clicks **Approve**.
 
 > 🚧 Work in progress. See [`slack-agent-PRD.md`](slack-agent-PRD.md) for the full spec and milestones.
