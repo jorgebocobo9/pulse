@@ -42,6 +42,7 @@ registerEventHandlers(app, {
   logger,
   model: config.ANTHROPIC_MODEL,
   createMessage: (params) => anthropic.messages.create(params),
+  dailyBudgetUsd: config.DAILY_BUDGET_USD,
 });
 registerActionHandlers(app, { db, logger, approverIds: config.APPROVER_USER_IDS });
 

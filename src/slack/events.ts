@@ -6,7 +6,8 @@ import type { Db } from '../db/client.js';
 import { utcToday } from '../dates.js';
 import type { Logger } from '../logger.js';
 import { setApprovalMessageTs } from '../services/approvals.js';
-import { estimateCostUsd, recordUsage } from '../services/budget.js';
+import { estimateCostUsd, isOverBudget, recordUsage } from '../services/budget.js';
+import { claimMessage } from '../services/dedupe.js';
 import { approvalRequestBlocks, approvalRequestText } from './blocks.js';
 import { stripBotMention, toSlackMrkdwn } from './format.js';
 
@@ -15,6 +16,7 @@ export interface EventDeps {
   logger: Logger;
   model: string;
   createMessage: CreateMessage;
+  dailyBudgetUsd: number;
 }
 
 interface IncomingMessage {
@@ -75,6 +77,11 @@ async function respond(client: webApi.WebClient, deps: EventDeps, message: Incom
   const key = conversationKey(channel, threadTs);
   const reply = (text: string) => client.chat.postMessage({ channel, thread_ts: threadTs, text });
 
+  if (!claimMessage(db, channel, ts)) {
+    logger.info({ key, ts }, 'duplicate message skipped');
+    return;
+  }
+
   if (!message.text) {
     await reply(GREETING_REPLY);
     return;
@@ -96,6 +103,7 @@ async function respond(client: webApi.WebClient, deps: EventDeps, message: Incom
         model,
         today,
         request: { userId: message.user, channelId: channel, threadTs },
+        isOverBudget: () => isOverBudget(db, today, deps.dailyBudgetUsd),
         onUsage: (usage) =>
           recordUsage(db, { date: today, model, inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }),
       },
