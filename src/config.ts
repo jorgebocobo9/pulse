@@ -14,6 +14,8 @@ const slackUserIds = z
       .min(1, 'needs at least one Slack user ID'),
   );
 
+export const DEFAULT_DATABASE_PATH = './data/pulse.db';
+
 const schema = z.object({
   SLACK_BOT_TOKEN: z.string().startsWith('xoxb-', 'must be a bot token starting with xoxb-'),
   SLACK_APP_TOKEN: z.string().startsWith('xapp-', 'must be an app-level token starting with xapp-'),
@@ -22,7 +24,7 @@ const schema = z.object({
   ANTHROPIC_MODEL: z.string().default('claude-haiku-5-5'),
   APPROVER_USER_IDS: slackUserIds,
   DAILY_BUDGET_USD: z.coerce.number().positive().default(1),
-  DATABASE_PATH: z.string().default('./data/pulse.db'),
+  DATABASE_PATH: z.string().default(DEFAULT_DATABASE_PATH),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
