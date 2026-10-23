@@ -17,8 +17,9 @@ Requires Node.js 22 or newer.
    - **Install App:** install it to your workspace. The Bot User OAuth Token is `SLACK_BOT_TOKEN` (`xoxb-…`).
 4. **Find your Slack user ID:** in Slack, click your profile picture → **Profile** → **⋮** → **Copy member ID**. Put it in `APPROVER_USER_IDS`.
 5. **Configure:** `cp .env.example .env` and fill in the values above.
-6. **Run:** `npm run dev`
-7. **Try it:** in a public channel, run `/invite @Pulse`, then send `@Pulse hello`. Pulse replies in a thread.
+6. **Load the demo data:** `npm run seed` creates 5 fake campaigns with 90 days of metrics ending today (UTC). Re-run it before a demo to refresh the numbers; it never deletes approvals or the audit log.
+7. **Run:** `npm run dev`
+8. **Try it:** in a public channel, run `/invite @Pulse`, then send `@Pulse hello`. Pulse replies in a thread.
 
 ## Scripts
 
@@ -26,5 +27,6 @@ Requires Node.js 22 or newer.
 |---|---|
 | `npm run dev` | Runs Pulse with auto-reload and readable logs |
 | `npm start` | Runs Pulse |
+| `npm run seed` | Loads or refreshes the demo campaign data |
 | `npm run typecheck` | Type-checks the project |
 | `npm test` | Runs the tests |
