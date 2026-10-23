@@ -2,10 +2,22 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { compareCampaigns, findCampaign, getCampaignStats, listCampaigns, type Campaign } from '../db/queries.js';
+import { createApproval, getActionLog, type Approval, type ApprovalAction } from '../services/approvals.js';
+
+/** Who sent the message and where. It comes from the Slack event, never from Claude. */
+export interface RequestContext {
+  userId: string;
+  channelId: string;
+  threadTs: string | undefined;
+}
 
 export interface ToolContext {
   db: Db;
   today: string;
+  now: Date;
+  /** Needed by the action tools. Absent outside Slack, for example in the smoke test. */
+  request?: RequestContext;
+  onApprovalCreated?: (approval: Approval) => void;
 }
 
 export interface ToolOutcome {
@@ -31,7 +43,8 @@ function defineTool<Schema extends z.ZodObject>(spec: {
   input: Schema;
   run: (input: z.infer<Schema>, ctx: ToolContext) => unknown;
 }): RegisteredTool {
-  const { $schema: _dialect, ...inputSchema } = z.toJSONSchema(spec.input);
+  // `io: 'input'` keeps fields with defaults optional in the schema Claude sees.
+  const { $schema: _dialect, ...inputSchema } = z.toJSONSchema(spec.input, { io: 'input' });
   return {
     definition: {
       name: spec.name,
@@ -62,6 +75,43 @@ function resolveCampaign(db: Db, name: string): Campaign {
     );
   }
   throw new ToolError(`No campaign matches "${name}". The campaigns are: ${match.allNames.join(', ')}.`);
+}
+
+// Creates a pending approval only. The campaign changes when an approver clicks Approve (see services/approvals.ts).
+function requestChangeTool(action: ApprovalAction): RegisteredTool {
+  const gerund = action === 'pause' ? 'pausing' : 'resuming';
+  return defineTool({
+    name: `request_${action}_campaign`,
+    description: `Ask a team lead to approve ${gerund} a campaign. This does not change the campaign. It posts an approval request with Approve and Cancel buttons below your reply, and the change happens only if an approver clicks Approve within 30 minutes.`,
+    input: z.object({
+      campaign_name: z.string().min(1).describe('The campaign name. Matching ignores case, and a unique part of the name also works.'),
+      reason: z.string().min(1).max(500).describe("Why the user wants this, in their words."),
+    }),
+    run: ({ campaign_name, reason }, { db, now, request, onApprovalCreated }) => {
+      if (!request) throw new ToolError('Campaign changes can only be requested from Slack.');
+      const campaign = resolveCampaign(db, campaign_name);
+      const outcome = createApproval(db, {
+        action,
+        campaign,
+        reason,
+        requestedBy: request.userId,
+        channelId: request.channelId,
+        threadTs: request.threadTs,
+        now,
+      });
+      if (outcome.kind === 'already_in_state') {
+        throw new ToolError(`${campaign.name} is already ${campaign.status}, so there is nothing to request.`);
+      }
+      onApprovalCreated?.(outcome.approval);
+      return {
+        status: 'approval_requested',
+        action,
+        campaign: campaign.name,
+        expiresAt: outcome.approval.expiresAt,
+        note: 'The approval request appears below your reply. Nothing changes until a team lead clicks Approve.',
+      };
+    },
+  });
 }
 
 const tools: RegisteredTool[] = [
@@ -97,6 +147,18 @@ const tools: RegisteredTool[] = [
     }),
     run: ({ metric, days }, { db, today }) => compareCampaigns(db, metric, days, today),
   }),
+  defineTool({
+    name: 'get_action_log',
+    description:
+      'Recent pause and resume requests, newest first: action, campaign, status (pending, approved, cancelled or expired), reason, who requested and decided them, and the times (UTC). Approved requests are the actions that were actually carried out. requestedBy and decidedBy are Slack user IDs; write them as <@USERID> so Slack shows the name.',
+    input: z.object({
+      days: days.default(1),
+      status: z.enum(['pending', 'approved', 'cancelled', 'expired']).optional().describe('Only return requests with this status.'),
+    }),
+    run: ({ days, status }, { db, today, now }) => getActionLog(db, { days, status, today, now }),
+  }),
+  requestChangeTool('pause'),
+  requestChangeTool('resume'),
 ];
 
 const toolsByName = new Map(tools.map((tool) => [tool.definition.name, tool]));

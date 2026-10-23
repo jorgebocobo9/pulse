@@ -51,7 +51,14 @@ let options: Omit<AgentOptions, 'createMessage'>;
 beforeEach(() => {
   const db = openDatabase(':memory:');
   seedDatabase(db, TODAY);
-  options = { db, logger: pino({ level: 'silent' }), model: 'claude-haiku-5-5', today: TODAY };
+  options = {
+    db,
+    logger: pino({ level: 'silent' }),
+    model: 'claude-haiku-5-5',
+    today: TODAY,
+    now: new Date('2026-06-30T10:00:00.000Z'),
+    request: { userId: 'UBUYER', channelId: 'C1', threadTs: '111.222' },
+  };
 });
 
 describe('runTurn', () => {
@@ -70,7 +77,7 @@ describe('runTurn', () => {
       output_config: { effort: 'low' },
     });
     expect(request).not.toHaveProperty('temperature');
-    expect(request.tools).toHaveLength(3);
+    expect(request.tools).toHaveLength(6);
     expect(request.messages[0]).toEqual({ role: 'user', content: 'Today is 2026-06-30 (UTC).\n\nhi' });
   });
 
@@ -196,5 +203,19 @@ describe('runTurn', () => {
     ]);
     await runTurn({ ...options, createMessage, onUsage: (u) => usages.push(u) }, [], 'List');
     expect(usages).toHaveLength(2);
+  });
+
+  it('returns the approval requests created during the turn', async () => {
+    const { createMessage } = fakeClient([
+      response(
+        [toolUse('t1', 'request_pause_campaign', { campaign_name: 'Black Friday Leads', reason: 'CPL is too high' })],
+        'tool_use',
+      ),
+      response([text('Requested. A team lead needs to approve it.')]),
+    ]);
+    const result = await runTurn({ ...options, createMessage }, [], 'Pause Black Friday Leads, CPL is too high');
+
+    expect(result.approvals).toHaveLength(1);
+    expect(result.approvals[0]).toMatchObject({ action: 'pause', campaignName: 'Black Friday Leads', requestedBy: 'UBUYER' });
   });
 });

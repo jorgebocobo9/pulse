@@ -2,7 +2,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { Db } from '../db/client.js';
 import type { Logger } from '../logger.js';
 import { formatUserMessage, SYSTEM_PROMPT } from './prompt.js';
-import { runTool, TOOL_DEFINITIONS } from './tools.js';
+import type { Approval } from '../services/approvals.js';
+import { runTool, TOOL_DEFINITIONS, type RequestContext } from './tools.js';
 
 export const MAX_ROUNDS = 6;
 export const MAX_TOKENS = 1024;
@@ -21,6 +22,10 @@ export interface AgentOptions {
   model: string;
   /** Today's date (UTC, YYYY-MM-DD). Tools count "the last N days" back from it. */
   today: string;
+  /** The current time, used for approval expiry. Defaults to now. */
+  now?: Date;
+  /** Who is asking and where, from the Slack event. Required for the pause and resume tools. */
+  request?: RequestContext;
   maxRounds?: number;
   /** Called after every API response, so usage is recorded even if a later call fails. */
   onUsage?: (usage: Anthropic.Usage) => void;
@@ -31,6 +36,8 @@ export interface TurnResult {
   /** The whole conversation including this turn, or null when the turn shouldn't be saved. */
   messages: Anthropic.MessageParam[] | null;
   outcome: 'answered' | 'truncated' | 'loop_limit' | 'refusal';
+  /** Approval requests created during this turn. The caller posts one message with buttons for each. */
+  approvals: Approval[];
   rounds: number;
   inputTokens: number;
   outputTokens: number;
@@ -46,6 +53,14 @@ export async function runTurn(
   userText: string,
 ): Promise<TurnResult> {
   const { createMessage, db, logger, model, today, maxRounds = MAX_ROUNDS } = options;
+  const approvals: Approval[] = [];
+  const toolContext = {
+    db,
+    today,
+    now: options.now ?? new Date(),
+    request: options.request,
+    onApprovalCreated: (approval: Approval) => approvals.push(approval),
+  };
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: formatUserMessage(userText, today) }];
   let inputTokens = 0;
   let outputTokens = 0;
@@ -67,6 +82,7 @@ export async function runTurn(
       reply,
       messages: saved,
       outcome,
+      approvals,
       rounds: round,
       inputTokens,
       outputTokens,
@@ -101,7 +117,7 @@ export async function runTurn(
       }
 
       const started = performance.now();
-      const outcome = runTool(toolUse.name, toolUse.input, { db, today });
+      const outcome = runTool(toolUse.name, toolUse.input, toolContext);
       const durationMs = Math.round(performance.now() - started);
       logger.info({ tool: toolUse.name, input: toolUse.input, durationMs, isError: outcome.isError }, 'tool call');
       if (outcome.failure) logger.error({ err: outcome.failure, tool: toolUse.name }, 'tool threw an unexpected error');
