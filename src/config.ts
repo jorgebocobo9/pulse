@@ -16,12 +16,19 @@ const slackUserIds = z
 
 export const DEFAULT_DATABASE_PATH = './data/pulse.db';
 
+/** USD per million tokens (prompts up to 100K tokens). Used to estimate spend for the daily budget. */
+export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
+  'claude-haiku-5-5': { input: 0.1, output: 0.5 },
+};
+
 const schema = z.object({
   SLACK_BOT_TOKEN: z.string().startsWith('xoxb-', 'must be a bot token starting with xoxb-'),
   SLACK_APP_TOKEN: z.string().startsWith('xapp-', 'must be an app-level token starting with xapp-'),
-  // Optional until M3, the first milestone that calls Claude.
-  ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().default('claude-haiku-5-5'),
+  ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-', 'must be an Anthropic API key starting with sk-ant-'),
+  ANTHROPIC_MODEL: z
+    .string()
+    .default('claude-haiku-5-5')
+    .refine((model) => model in MODEL_PRICES, "has no price in MODEL_PRICES (src/config.ts), so its cost can't be estimated"),
   APPROVER_USER_IDS: slackUserIds,
   DAILY_BUDGET_USD: z.coerce.number().positive().default(1),
   DATABASE_PATH: z.string().default(DEFAULT_DATABASE_PATH),

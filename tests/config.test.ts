@@ -4,6 +4,7 @@ import { ConfigError, loadConfig } from '../src/config.js';
 const validEnv = {
   SLACK_BOT_TOKEN: 'xoxb-test',
   SLACK_APP_TOKEN: 'xapp-test',
+  ANTHROPIC_API_KEY: 'sk-ant-test',
   APPROVER_USER_IDS: 'U012ABCDEF, U034GHIJKL',
 };
 
@@ -42,6 +43,16 @@ describe('loadConfig', () => {
   it('rejects tokens of the wrong type', () => {
     expect(() => loadConfig({ ...validEnv, SLACK_BOT_TOKEN: 'xapp-oops' })).toThrow(/xoxb-/);
     expect(() => loadConfig({ ...validEnv, SLACK_APP_TOKEN: 'xoxb-oops' })).toThrow(/xapp-/);
+  });
+
+  it('requires an Anthropic API key', () => {
+    const { ANTHROPIC_API_KEY: _omitted, ...withoutKey } = validEnv;
+    expect(() => loadConfig(withoutKey)).toThrow(/ANTHROPIC_API_KEY/);
+    expect(() => loadConfig({ ...validEnv, ANTHROPIC_API_KEY: 'not-a-key' })).toThrow(/sk-ant-/);
+  });
+
+  it('rejects a model without a known price', () => {
+    expect(() => loadConfig({ ...validEnv, ANTHROPIC_MODEL: 'claude-unknown' })).toThrow(/MODEL_PRICES/);
   });
 
   it('rejects a non-positive budget', () => {
