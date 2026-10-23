@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { pino } from 'pino';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  BUDGET_REPLY,
   LOOP_LIMIT_REPLY,
   MAX_ROUNDS,
   REFUSAL_REPLY,
@@ -217,5 +218,30 @@ describe('runTurn', () => {
 
     expect(result.approvals).toHaveLength(1);
     expect(result.approvals[0]).toMatchObject({ action: 'pause', campaignName: 'Black Friday Leads', requestedBy: 'UBUYER' });
+  });
+});
+
+describe('runTurn budget guard', () => {
+  it('does not call Claude when the budget is already used up', async () => {
+    const { createMessage, requests } = fakeClient([response([text('never sent')])]);
+    const result = await runTurn({ ...options, createMessage, isOverBudget: () => true }, [], 'hi');
+
+    expect(requests).toHaveLength(0);
+    expect(result).toMatchObject({ reply: BUDGET_REPLY, outcome: 'over_budget', messages: null, rounds: 0 });
+  });
+
+  it('stops mid-turn when the budget runs out, leaving a valid history', async () => {
+    let calls = 0;
+    const { createMessage, requests } = fakeClient([
+      response([toolUse('t1', 'list_campaigns', {})], 'tool_use'),
+      response([text('never sent')]),
+    ]);
+    const result = await runTurn({ ...options, createMessage, isOverBudget: () => ++calls > 1 }, [], 'List');
+
+    expect(requests).toHaveLength(1);
+    expect(result).toMatchObject({ reply: BUDGET_REPLY, outcome: 'over_budget', rounds: 1 });
+    const messages = result.messages!;
+    expect(messages.at(-2)!.content).toEqual([expect.objectContaining({ type: 'tool_result', tool_use_id: 't1' })]);
+    expect(messages.at(-1)).toEqual({ role: 'assistant', content: BUDGET_REPLY });
   });
 });

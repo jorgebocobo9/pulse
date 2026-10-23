@@ -12,6 +12,7 @@ export const REFUSAL_REPLY = "Sorry, I can't help with that request.";
 export const TRUNCATED_REPLY = "Sorry, my answer got cut off. Could you ask a narrower question?";
 export const LOOP_LIMIT_REPLY =
   "Sorry, I couldn't finish that within my step limit. Could you break it into smaller questions?";
+export const BUDGET_REPLY = "I've reached today's spending limit, so I'm paused until 00:00 UTC. Please try again then.";
 
 export type CreateMessage = (params: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
 
@@ -27,6 +28,8 @@ export interface AgentOptions {
   /** Who is asking and where, from the Slack event. Required for the pause and resume tools. */
   request?: RequestContext;
   maxRounds?: number;
+  /** Checked before every Claude call. When it returns true, the turn stops without calling Claude. */
+  isOverBudget?: () => boolean;
   /** Called after every API response, so usage is recorded even if a later call fails. */
   onUsage?: (usage: Anthropic.Usage) => void;
 }
@@ -35,7 +38,7 @@ export interface TurnResult {
   reply: string;
   /** The whole conversation including this turn, or null when the turn shouldn't be saved. */
   messages: Anthropic.MessageParam[] | null;
-  outcome: 'answered' | 'truncated' | 'loop_limit' | 'refusal';
+  outcome: 'answered' | 'truncated' | 'loop_limit' | 'refusal' | 'over_budget';
   /** Approval requests created during this turn. The caller posts one message with buttons for each. */
   approvals: Approval[];
   rounds: number;
@@ -66,6 +69,14 @@ export async function runTurn(
   let outputTokens = 0;
 
   for (let round = 1; ; round++) {
+    if (options.isOverBudget?.()) {
+      const result = { reply: BUDGET_REPLY, outcome: 'over_budget' as const, approvals, rounds: round - 1, inputTokens, outputTokens };
+      // Before the first call there is nothing worth saving. Mid-turn, close the turn so the history stays valid.
+      if (round === 1) return { ...result, messages: null };
+      messages.push({ role: 'assistant', content: BUDGET_REPLY });
+      return { ...result, messages };
+    }
+
     const response = await createMessage({
       model,
       max_tokens: MAX_TOKENS,

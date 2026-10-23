@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../src/db/client.js';
-import { estimateCostUsd, recordUsage } from '../src/services/budget.js';
+import { estimateCostUsd, getSpendForDate, isOverBudget, recordUsage } from '../src/services/budget.js';
 
 describe('estimateCostUsd', () => {
   it('prices Haiku 5.5 at $0.10 input and $0.50 output per million tokens', () => {
@@ -26,5 +26,25 @@ describe('recordUsage', () => {
       output_tokens: 500,
       est_cost_usd: cost,
     });
+  });
+});
+
+describe('daily budget', () => {
+  it('adds up spend for one UTC day only and blocks once the limit is reached', () => {
+    const db = openDatabase(':memory:');
+    const record = (date: string, inputTokens: number) =>
+      recordUsage(db, { date, model: 'claude-haiku-5-5', inputTokens, outputTokens: 0 });
+
+    expect(getSpendForDate(db, '2026-06-30')).toBe(0);
+    expect(isOverBudget(db, '2026-06-30', 1)).toBe(false);
+
+    record('2026-06-30', 6_000_000); // $0.60
+    record('2026-06-29', 9_000_000); // $0.90, yesterday
+    expect(getSpendForDate(db, '2026-06-30')).toBeCloseTo(0.6);
+    expect(isOverBudget(db, '2026-06-30', 1)).toBe(false);
+
+    record('2026-06-30', 4_000_000); // total $1.00
+    expect(isOverBudget(db, '2026-06-30', 1)).toBe(true);
+    expect(isOverBudget(db, '2026-07-01', 1)).toBe(false);
   });
 });
