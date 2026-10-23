@@ -11,12 +11,14 @@
     "dev": "tsx watch src/index.ts | pino-pretty",
     "start": "tsx src/index.ts",
     "seed": "tsx scripts/seed.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "author": "Jorge Bocobo",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.2.0",
     "@slack/bolt": "^5.1.0",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^18.0.9",
