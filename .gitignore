@@ -8,3 +8,4 @@ data/
 coverage/
 dist/
 .DS_Store
+evals/results/

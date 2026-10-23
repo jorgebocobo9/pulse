@@ -12,6 +12,7 @@
     "start": "tsx src/index.ts",
     "seed": "tsx scripts/seed.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "eval": "tsx evals/run.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
