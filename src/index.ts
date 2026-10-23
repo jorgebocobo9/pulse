@@ -5,6 +5,7 @@ import { ConfigError, loadConfig, type Config } from './config.js';
 import { openDatabase } from './db/client.js';
 import { listCampaigns } from './db/queries.js';
 import { createLogger } from './logger.js';
+import { registerActionHandlers } from './slack/actions.js';
 import { registerEventHandlers } from './slack/events.js';
 
 loadDotenv({ quiet: true });
@@ -42,6 +43,7 @@ registerEventHandlers(app, {
   model: config.ANTHROPIC_MODEL,
   createMessage: (params) => anthropic.messages.create(params),
 });
+registerActionHandlers(app, { db, logger, approverIds: config.APPROVER_USER_IDS });
 
 app.error(async (error) => {
   logger.error({ err: error }, 'unhandled Slack error');
