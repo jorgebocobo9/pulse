@@ -4,7 +4,9 @@
 
 A Slack assistant for a (fictional) performance marketing team, built on the Claude API. Ask it about campaign performance in plain English: Claude chooses the right tools, reads the numbers from a database and answers in the thread. Risky actions, such as pausing a campaign, never run on their own. Pulse posts an approval request, and nothing changes until a team lead clicks **Approve**.
 
-<!-- Demo: replace with a GIF or video link once recorded (see docs/DEMO.md). -->
+![Pulse requesting approval to pause a campaign, a team lead approving it, then Pulse reporting the action log](docs/media/approval-flow.gif)
+
+*Asking Pulse to pause a campaign: it posts an approval request, a team lead approves it, and the action log shows the change (2.5× speed). The [full 2-minute walkthrough](docs/media/pulse-demo.mp4) also covers stats questions, thread follow-ups and an unknown campaign.*
 
 All data is fake. Pulse never connects to a real ad account.
 
