@@ -41,7 +41,7 @@ Pulse ships in two tiers. **v1** is the portfolio piece: it is what gets demoed,
 | Approvals | Buttons, approver list, idempotent approve, expiry on click, audit log for approve/cancel/expire | Block self-approval, block duplicate pending requests, expiry sweep that removes stale buttons |
 | Duplicates and failures | Per-message dedupe, `ack()` first, SDK retries, refusals, loop limit | Delete old `processed_events` rows |
 | Cost | Haiku 5.5 at low effort, 1,024-token cap, daily budget guard, Console spend limit | — |
-| Data | Deterministic generator, `npm run seed` refreshes metrics up to today | Automatic top-up of missing days on startup |
+| Data | Deterministic generator, `npm run seed` refreshes metrics up to today | Automatic refresh on startup when the data doesn't end today |
 | Quality | ~12 automated tests, 10 eval cases, CI | More tests for the v1.1 features, eval set grown to 20 cases |
 | Docs | README with demo video, Known limitations, SOP | — |
 
@@ -228,11 +228,11 @@ CREATE TABLE usage_log (
 ### 8.5 Seed data
 The seed creates 5 fake campaigns (for example Summer Sale, Black Friday Leads, Retargeting Q4, Brand Awareness, New Customer Promo) with 90 days of daily metrics, ending on the day it runs (UTC). Give each a different story so the demo is interesting: one improving, one getting worse (rising CPL), one paused (no spend after its pause date), one with high ROAS.
 
-Metrics come from a deterministic generator (`db/generator.ts`). Each day's numbers depend only on the campaign and the date, using a seeded random number generator, so the same day always gets the same numbers. Tests and evals use an in-memory database filled by the same generator, so expected values are known in advance.
+Metrics come from a deterministic generator (`db/generator.ts`). Its output depends only on the end date of the 90-day window: each day's random noise is seeded by the campaign and the date, and each campaign's trend runs from the start of the window to its end. The same end date always produces the same numbers. Tests and evals use an in-memory database filled by the same generator, so expected values are known in advance.
 
 `npm run seed` can be re-run at any time, for example before a demo. It inserts or updates campaigns by fixed id, resets their statuses to the starting values, and writes metrics up to today. It never touches `approvals`, `audit_log`, `usage_log` or `conversations`.
 
-- **v1.1:** On startup, Pulse uses the same generator to add any missing days up to today, so the seed only ever needs to run once.
+- **v1.1:** On startup, if the latest metrics date isn't today, Pulse re-runs the metrics part of the seed, so the data never goes stale without a manual re-seed.
 
 ### 8.6 Project structure
 
@@ -315,7 +315,7 @@ LOG_LEVEL=info
 - A second request while one is still pending for the same campaign and action creates no new approval.
 - The sweep marks overdue approvals `expired` and writes audit entries.
 - Two messages in the same conversation are processed one after the other, and both turns end up in the history.
-- The startup top-up adds only the missing days.
+- The startup refresh runs only when the data doesn't end today, and leaves campaign statuses alone.
 
 ### 9.3 Manual checklist
 - Mention the bot in a channel and in a DM.
@@ -374,7 +374,7 @@ When v1.1's self-approval block is built, step 3 changes: request as the media b
 | M4 | v1 | Approvals | Pause and resume work end to end with buttons, expiry and the audit log |
 | M5 | v1 | Hardening | Message dedupe, idempotent approvals, retries, loop limit and budget guard |
 | M6 | v1 | Ship | 10 evals passing, tests passing, README (with Known limitations) and SOP written, demo recorded. **v1 is done: start applying.** |
-| M7 | v1.1 | Polish | Self-approval block, duplicate-request block, expiry sweep, conversation queue, startup top-up, 20 evals, and the README's Known limitations updated |
+| M7 | v1.1 | Polish | Self-approval block, duplicate-request block, expiry sweep, conversation queue, startup data refresh, 20 evals, and the README's Known limitations updated |
 
 ## 13. Acceptance criteria (v1)
 
