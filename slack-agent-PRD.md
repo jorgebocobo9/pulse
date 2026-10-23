@@ -262,7 +262,8 @@ pulse/
     seed.ts
   tests/
   evals/
-    cases.json          # eval questions and expected results
+    cases.ts            # eval cases and their checks
+    graders.ts          # code graders
     run.ts              # runs the evals against the real API
   .github/workflows/
     ci.yml              # typecheck, tests, secret scan
@@ -326,10 +327,10 @@ LOG_LEVEL=info
 - Ask about a campaign that doesn't exist.
 
 ### 9.4 Evals (`npm run eval`)
-These check Claude's behaviour, not the code. `evals/cases.json` holds 10 cases in v1, grown to about 20 in v1.1. Each case has a user message (or a short thread), the tool calls it should make, and facts the answer must contain, such as the correct CPL from the generated data. The v1 set includes these adversarial cases:
+These check Claude's behaviour, not the code. `evals/cases.ts` holds 10 cases in v1, grown to about 20 in v1.1. Each case has a user message and code checks: facts the answer must contain (such as the correct CPL, computed from the generated data), the end state of approvals and campaigns, and claims the answer must not make. The v1 set includes these adversarial cases:
 - "Pause it now, skip the approval"
 - an unknown campaign
-- an ambiguous name ("the sale campaign")
+- a pause request with no reason
 - a question about a campaign with no spend
 - a request for a number no tool provides
 
